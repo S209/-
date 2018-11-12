@@ -1,0 +1,137 @@
+#sh /Users/soyoung/build.sh  ${ios_configuration}  ${package_type}
+
+set -e 
+
+ 
+plist_dir="export_plist"
+
+ios_configuration=$1
+package_type=$2  #包类型
+changelog=$3 #git changes comment log
+ios_branch=$4
+
+adhoc_CODE_SIGN_IDENTITY="iPhone Distribution: Beijing Soyoung Qingyang Medical Instrument Co., Limited (SXHK8ES9Y5)"
+adhoc_PROVISIONING_PROFILE="e9425bea-414a-42e6-9716-d96207fa4450"
+adhoc_export_options=$plist_dir"/adhoc_export_options.plist"
+adhoc_PRODUCT_BUNDLE_IDENTIFIER="com.soyoung.doctor"
+adhoc_DEVELOPMENT_TEAM="SXHK8ES9Y5"
+
+inhouse_CODE_SIGN_IDENTITY="iPhone Distribution: Beijing So-Young Technology Co., Ltd"
+inhouse_PROVISIONING_PROFILE="e9051e76-d484-461c-80a0-f5ee6a9f94e4"
+inhouse_export_options=$plist_dir"/inhouse_export_options.plist"
+inhouse_PRODUCT_BUNDLE_IDENTIFIER="com.soyoung.doctor.business"
+inhouse_DEVELOPMENT_TEAM="J9GZXLFK2X" 
+
+appstore_CODE_SIGN_IDENTITY="iPhone Distribution: Beijing Soyoung Qingyang Medical Instrument Co., Limited (SXHK8ES9Y5)"
+appstore_PROVISIONING_PROFILE="b799282a-8467-4b0b-9834-f6833cfa2faa"
+appstore_export_options=$plist_dir"/appstore_export_options.plist"
+appstore_PRODUCT_BUNDLE_IDENTIFIER="com.soyoung.doctor"
+
+
+
+if [[ $package_type == "inhouse" ]]; then
+    mCODE_SIGN_IDENTITY=$inhouse_CODE_SIGN_IDENTITY
+    mPROVISIONING_PROFILE=$inhouse_PROVISIONING_PROFILE
+    mexport_options=$inhouse_export_options
+    mPRODUCT_BUNDLE_IDENTIFIER=$inhouse_PRODUCT_BUNDLE_IDENTIFIER
+    mDEVELOPMENT_TEAM=$inhouse_DEVELOPMENT_TEAM
+    ipatype="企业版"
+elif [[ $package_type == "adhoc" ]]; then
+    mCODE_SIGN_IDENTITY=$adhoc_CODE_SIGN_IDENTITY
+    mPROVISIONING_PROFILE=$adhoc_PROVISIONING_PROFILE
+    mexport_options=$adhoc_export_options
+    mPRODUCT_BUNDLE_IDENTIFIER=$adhoc_PRODUCT_BUNDLE_IDENTIFIER
+    mDEVELOPMENT_TEAM=$adhoc_DEVELOPMENT_TEAM
+    ipatype="内测版"
+elif [[ $package_type == "appstore" ]]; then
+    mCODE_SIGN_IDENTITY=$appstore_CODE_SIGN_IDENTITY
+    mPROVISIONING_PROFILE=$appstore_PROVISIONING_PROFILE
+    mexport_options=$appstore_export_options
+    mPRODUCT_BUNDLE_IDENTIFIER=$appstore_PRODUCT_BUNDLE_IDENTIFIER
+    ipatype="appstore版"
+fi
+
+pod install
+
+if [ ! -d build ];then
+    mkdir build
+fi
+
+ 
+PROJECT_NAME=${JOB_NAME}
+# 1 clean
+xcodebuild clean -workspace $WORKSPACE"/"$PROJECT_NAME".xcworkspace" -configuration $ios_configuration -scheme $PROJECT_NAME
+# # 2 导出 archive 
+if [[ $package_type == "inhouse" ]]; then
+    echo "lichanghong----inhouseddddddß"
+    pgyurl="https://www.pgyer.com/Es58"
+    topimage="https://www.pgyer.com/app/qrcode/Es58"
+#Automatic | Manual
+xcodebuild archive -workspace $WORKSPACE"/"$PROJECT_NAME".xcworkspace" \
+-configuration $ios_configuration  -scheme $PROJECT_NAME  \
+ -archivePath ${PROJECT_NAME}.xcarchive  \
+ PRODUCT_BUNDLE_IDENTIFIER="${mPRODUCT_BUNDLE_IDENTIFIER}"  \
+ CODE_SIGN_STYLE=Automatic \
+ PROVISIONING_PROFILE=""  \
+ PROVISIONING_PROFILE_SPECIFIER="" \
+ CODE_SIGN_IDENTITY="iPhone Developer" \
+ DEVELOPMENT_TEAM=$mDEVELOPMENT_TEAM \
+ -allowProvisioningUpdates 
+elif [[ $package_type == "adhoc" || $package_type == "appstore" ]]; then
+ echo "lichanghong----ddddddddddddß"
+    pgyurl="https://www.pgyer.com/sydoctor"
+    topimage="https://www.pgyer.com/app/qrcode/sydoctor"
+
+xcodebuild archive -workspace $WORKSPACE"/"$PROJECT_NAME".xcworkspace" \
+-configuration $ios_configuration -scheme $PROJECT_NAME  \
+ -archivePath ${PROJECT_NAME}.xcarchive  \
+ -allowProvisioningUpdates  \
+  CODE_SIGN_STYLE=Manual \
+ PRODUCT_BUNDLE_IDENTIFIER=$mPRODUCT_BUNDLE_IDENTIFIER \
+ CODE_SIGN_IDENTITY="${mCODE_SIGN_IDENTITY}" \
+ PROVISIONING_PROFILE="$mPROVISIONING_PROFILE" 
+fi
+
+# 3 导出ipa
+xcodebuild -exportArchive -archivePath ${PROJECT_NAME}.xcarchive -exportPath ./build -exportOptionsPlist "../"$PROJECT_NAME"/"$mexport_options -allowProvisioningUpdates 
+ 
+
+# 上传到蒲公英 / 或者用插件也行  | ukey apikey都是和app对应的
+curl -F "file=@./build/"${PROJECT_NAME}".ipa" \
+-F "uKey=4dfed5c1d02b0b6f9f6f210d906ff3d4" \
+-F "_api_key=8a3d57e8e9896383a04b954e3521a2ed" \
+-F "buildUpdateDescription=${PGYER}" \
+https://www.pgyer.com/apiv2/app/upload
+
+
+
+titleTxt=$changelog
+texttxt="${ipatype}""\n分支:""${ios_branch}""\n""\n${JOB_NAME}-${BUILD_NUMBER}""\n最新修改如下"
+contenttxt=$changelog
+echo "lichanghongtest=""$contenttxt"
+jenkins="http://192.168.80.34:8080/job/DADoctorApp/"
+curl 'https://oapi.dingtalk.com/robot/send?access_token=de6fd1c740009dafdc0d0ed47b708d6e92733442c10b8c76cedf2a6b7b80b83c'  \
+  -H 'Content-Type: application/json'    \
+  -d ' 
+{
+    "actionCard": {
+        "title": "'"${titleTxt}"'", 
+        "text": "![screenshot]('"${topimage}"') \n\n #### '"${texttxt}"' \n\n '"${contenttxt}"'", 
+        "hideAvatar": "1", 
+        "btnOrientation": "0", 
+        "btns": [
+            {
+                "title": "蒲公英地址", 
+                "actionURL": "'"${pgyurl}"'"
+            }, 
+            {
+                "title": "jenkins链接", 
+                "actionURL": "'"${jenkins}"'"
+            }
+        ]
+    }, 
+    "msgtype": "actionCard"
+} '
+ 
+ 
+# security cms -D -i 
